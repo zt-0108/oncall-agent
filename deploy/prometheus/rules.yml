@@ -1,0 +1,131 @@
+groups:
+  - name: oncall-agent-availability
+    interval: 10s
+    rules:
+      - alert: OnCallAgentMetricsUnavailable
+        expr: up{job="oncall-agent"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: oncall-agent
+        annotations:
+          summary: OnCall Agent 指标端点不可用
+          description: Prometheus 连续 30 秒无法采集 {{ $labels.instance }}/metrics。
+
+  - name: oncall-agent-http
+    interval: 30s
+    rules:
+      - alert: OnCallAgentHighErrorRate
+        expr: |
+          (
+            sum(rate(oncall_agent_http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(oncall_agent_http_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: oncall-agent
+        annotations:
+          summary: OnCall Agent HTTP 5xx 错误率过高
+          description: 最近 5 分钟 HTTP 5xx 错误率持续超过 5%，当前值为 {{ $value | humanizePercentage }}。
+
+      - alert: OnCallAgentHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(oncall_agent_http_request_duration_seconds_bucket[5m]))
+          ) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: oncall-agent
+        annotations:
+          summary: OnCall Agent P95 延迟过高
+          description: 最近 5 分钟 HTTP P95 响应时间持续超过 2 秒，当前值为 {{ $value | humanizeDuration }}。
+  - name: oncall-agent-aiops
+    interval: 30s
+    rules:
+      - alert: OnCallAgentAIOpsDiagnosisFailures
+        expr: increase(oncall_agent_aiops_diagnoses_total{status=~"error|incomplete"}[10m]) > 0
+        labels:
+          severity: warning
+          service: oncall-agent
+        annotations:
+          summary: AIOps 诊断执行失败
+          description: 最近 10 分钟出现 AIOps 诊断错误或非正常结束，请检查应用日志和外部数据源。
+  - name: fault-lab
+    interval: 10s
+    rules:
+      - alert: FaultLabUnavailable
+        expr: up{job="fault-lab"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 实验服务不可用
+          description: Prometheus 连续 30 秒无法采集 Fault Lab 指标。
+
+      - alert: FaultLabHighErrorRate
+        expr: |
+          sum(rate(fault_lab_http_requests_total{path="/api/checkout",status=~"5.."}[2m]))
+          /
+          clamp_min(sum(rate(fault_lab_http_requests_total{path="/api/checkout"}[2m])), 0.001)
+          > 0.20
+        for: 20s
+        labels:
+          severity: warning
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 结账错误率过高
+          description: 最近 2 分钟结账接口 5xx 比例持续超过 20%，当前值 {{ $value | humanizePercentage }}。
+
+      - alert: FaultLabHighP95Latency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(fault_lab_http_request_duration_seconds_bucket{path="/api/checkout"}[2m]))
+          ) > 2
+        for: 20s
+        labels:
+          severity: warning
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 结账 P95 延迟过高
+          description: 最近 2 分钟结账 P95 延迟持续超过 2 秒，当前值 {{ $value | humanizeDuration }}。
+
+      - alert: FaultLabDatabaseErrors
+        expr: increase(fault_lab_database_failures_total[2m]) > 0
+        labels:
+          severity: critical
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 数据库连接失败
+          description: 订单数据库连接失败计数在最近 2 分钟增加。
+
+      - alert: FaultLabDependencyTimeouts
+        expr: increase(fault_lab_dependency_failures_total{reason="timeout"}[2m]) > 0
+        labels:
+          severity: critical
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 支付依赖超时
+          description: 支付依赖超时计数在最近 2 分钟增加。
+      - alert: FaultLabResourcePressure
+        expr: fault_lab_resource_pressure > 90
+        for: 20s
+        labels:
+          severity: warning
+          service: fault-lab
+          data_origin: live_local
+        annotations:
+          summary: Fault Lab 资源压力过高
+          description: >-
+            {{ $labels.service }} 的 {{ $labels.resource }} 回放压力持续超过 90%，
+            当前值为 {{ $value }}%。

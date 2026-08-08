@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "data_origin": "live_local",
+  "scenarios": [
+    {
+      "id": "normal",
+      "title": "正常运行",
+      "description": "结账服务正常返回，用于建立健康基线。",
+      "expected_alerts": [],
+      "expected_evidence": ["HTTP 200", "低响应延迟"],
+      "ground_truth": "无故障",
+      "runbook": "normal.md",
+      "safe": true
+    },
+    {
+      "id": "database-error",
+      "title": "数据库查询失败",
+      "description": "模拟订单数据库连接被拒绝，结账请求返回 HTTP 500。",
+      "expected_alerts": ["FaultLabHighErrorRate", "FaultLabDatabaseErrors"],
+      "expected_evidence": ["database connection refused", "HTTP 500"],
+      "ground_truth": "订单数据库连接不可用",
+      "runbook": "database-error.md",
+      "safe": true
+    },
+    {
+      "id": "dependency-timeout",
+      "title": "支付依赖超时",
+      "description": "模拟支付服务超过调用超时，结账请求延迟后返回 HTTP 504。",
+      "expected_alerts": ["FaultLabHighErrorRate", "FaultLabHighP95Latency", "FaultLabDependencyTimeouts"],
+      "expected_evidence": ["payment dependency timeout", "HTTP 504", "P95 latency"],
+      "ground_truth": "支付服务调用超时",
+      "runbook": "dependency-timeout.md",
+      "safe": true
+    },
+    {
+      "id": "high-latency",
+      "title": "业务处理延迟",
+      "description": "模拟结账处理缓慢但最终成功，HTTP 200 响应耗时约 2.5 秒。",
+      "expected_alerts": ["FaultLabHighP95Latency"],
+      "expected_evidence": ["HTTP 200", "duration_ms >= 2500"],
+      "ground_truth": "结账业务处理耗时异常",
+      "runbook": "high-latency.md",
+      "safe": true
+    },
+    {
+      "id": "intermittent-500",
+      "title": "间歇性服务错误",
+      "description": "每两个请求中有一个返回 HTTP 500，用于模拟抖动故障。",
+      "expected_alerts": ["FaultLabHighErrorRate"],
+      "expected_evidence": ["约 50% HTTP 500", "intermittent failure"],
+      "ground_truth": "结账处理器发生间歇性异常",
+      "runbook": "intermittent-500.md",
+      "safe": true
+    }
+  ]
+}

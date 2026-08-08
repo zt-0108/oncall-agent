@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OnCall Agent - 对话与智能运维工作台">
+  <title>OnCall Agent</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="OnCall Agent 首页">
+        <span class="brand-mark">O</span>
+        <span><strong>OnCall</strong><small>Agent Console</small></span>
+      </a>
+
+      <p class="nav-label">智能工作区</p>
+      <nav class="agent-nav" aria-label="Agent 切换">
+        <button id="navChatAgent" class="agent-nav-item active" type="button" data-view="chat">
+          <span class="agent-icon blue">✦</span>
+          <span><strong>对话 Agent</strong><small>知识问答与工具协作</small></span>
+        </button>
+        <button id="navAiopsAgent" class="agent-nav-item" type="button" data-view="aiops">
+          <span class="agent-icon orange">⌁</span>
+          <span><strong>AIOps Agent</strong><small>告警诊断与运维分析</small></span>
+        </button>
+      </nav>
+
+      <div class="sidebar-note">
+        <span class="pulse-dot"></span>
+        <div><strong>服务已连接</strong><small>具体数据源状态请查看 AIOps</small></div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section id="chatView" class="view active" aria-labelledby="chatTitle">
+        <header class="workspace-header">
+          <div>
+            <span class="eyebrow">CONVERSATION AGENT</span>
+            <h1 id="chatTitle">对话 Agent</h1>
+            <p>面向知识库问答、文件检索与工具协作的通用助手。</p>
+          </div>
+          <button id="newChatButton" class="button secondary" type="button">＋ 新对话</button>
+        </header>
+
+        <div id="chatMessages" class="chat-messages" aria-live="polite">
+          <article class="message assistant welcome-card">
+            <div class="avatar">O</div>
+            <div class="message-body">
+              <span class="message-role">对话 Agent</span>
+              <h2>今天需要我帮你处理什么？</h2>
+              <p>你可以直接提问，也可以上传 Markdown 或文本文件后进行知识库检索。</p>
+              <div class="suggestions">
+                <button type="button" data-prompt="总结当前知识库中的主要内容">总结知识库</button>
+                <button type="button" data-prompt="帮我梳理一个线上故障的排查思路">梳理排障思路</button>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea id="chatInput" rows="1" maxlength="4000" placeholder="向对话 Agent 提问…" aria-label="输入问题"></textarea>
+            <div class="composer-actions">
+              <input id="uploadInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden>
+              <button id="uploadButton" class="icon-button" type="button" title="上传知识文件">⌕</button>
+              <span id="uploadStatus" class="upload-status"></span>
+              <button id="chatSend" class="send-button" type="button">发送 <span>↑</span></button>
+            </div>
+          </div>
+          <p class="composer-hint">Enter 发送 · Shift + Enter 换行 · Agent 的结论仍需结合实际环境核验</p>
+        </div>
+      </section>
+
+      <section id="aiopsView" class="view" aria-labelledby="aiopsTitle">
+        <header class="workspace-header aiops-header">
+          <div>
+            <span class="eyebrow orange-text">AIOPS AGENT</span>
+            <h1 id="aiopsTitle">AIOps 诊断控制台</h1>
+            <p>先确认数据源，再选择诊断方式。进入此页面不会自动执行任何任务。</p>
+          </div>
+          <button id="sourceRefresh" class="button secondary" type="button">↻ 刷新状态</button>
+        </header>
+
+        <section class="source-section" aria-labelledby="sourceTitle">
+          <div class="section-heading">
+            <div><h2 id="sourceTitle">数据源状态</h2><p>每个连接独立检查，单个服务故障不会拖垮其他能力。</p></div>
+            <span id="sourceSummary" class="status-pill checking">检查中</span>
+          </div>
+          <div id="sourceCards" class="source-grid">
+            <article class="source-card loading" data-source="prometheus"><div class="source-icon">P</div><div><strong>Prometheus</strong><small>实时告警源</small><p>正在检查…</p></div><span class="source-state">···</span></article>
+            <article class="source-card loading" data-source="cls"><div class="source-icon">L</div><div><strong>CLS MCP</strong><small>日志查询工具</small><p>正在检查…</p></div><span class="source-state">···</span></article>
+            <article class="source-card loading" data-source="monitor"><div class="source-icon">M</div><div><strong>Monitor MCP</strong><small>指标查询工具</small><p>正在检查…</p></div><span class="source-state">···</span></article>
+            <article class="source-card loading" data-source="milvus"><div class="source-icon">V</div><div><strong>Milvus</strong><small>向量知识库</small><p>正在检查…</p></div><span class="source-state">···</span></article>
+            <article class="source-card loading" data-source="fault_lab"><div class="source-icon">F</div><div><strong>Fault Lab</strong><small>受控故障实验服务</small><p>正在检查…</p></div><span class="source-state">···</span></article>
+          </div>
+        </section>
+
+        <section id="faultLabSection" class="fault-section" aria-labelledby="faultLabTitle">
+          <div class="section-heading">
+            <div><h2 id="faultLabTitle">故障实验室</h2><p>在独立服务中复现安全、可恢复的真实故障，不影响 OnCall Agent 本身。</p></div>
+            <span class="origin-badge">LIVE · LOCAL</span>
+          </div>
+          <div class="fault-console">
+            <div class="fault-picker">
+              <label for="faultScenarioSelect">实验场景</label>
+              <select id="faultScenarioSelect"><option value="">正在加载场景…</option></select>
+              <div id="faultScenarioDetail" class="fault-detail">Fault Lab 启动后可查看场景说明。</div>
+            </div>
+            <div class="fault-state-card">
+              <span>当前状态</span>
+              <strong id="faultActiveScenario">等待检查</strong>
+              <small id="faultExpiry">正在读取安全时限</small>
+              <small id="faultRunSummary">尚未产生实验流量</small>
+            </div>
+          </div>
+          <div class="fault-actions">
+            <button id="faultActivate" class="button secondary" type="button">启用所选场景</button>
+            <button id="faultRun" class="button primary" type="button">产生 12 次真实请求</button>
+            <button id="faultReset" class="button ghost" type="button">恢复正常</button>
+          </div>
+          <p class="fault-hint">场景只改变 9910 端口的实验服务。Prometheus 约每 10 秒采集一次，告警需要短暂评估时间。</p>
+        </section>
+
+        <section class="memory-section" aria-labelledby="memoryTitle">
+          <div class="section-heading">
+            <div><h2 id="memoryTitle">已确认故障记忆</h2><p>只展示经过人工确认并成功写入 Milvus 的历史案例。</p></div>
+            <button id="memoryRefresh" class="button secondary" type="button">↻ 刷新</button>
+          </div>
+          <div id="memoryList" class="memory-list">
+            <div class="memory-empty">正在读取故障记忆…</div>
+          </div>
+          <p class="fault-hint">历史案例只能作为排查线索，当前根因仍需由实时日志、指标和告警验证。</p>
+        </section>
+
+        <section class="diagnosis-section" aria-labelledby="diagnosisTitle">
+          <div class="section-heading"><div><h2 id="diagnosisTitle">新建诊断</h2><p>实时诊断使用告警数据；手工诊断从你提供的现象开始。</p></div></div>
+          <div class="mode-tabs" role="tablist">
+            <button id="modeRealtime" class="mode-tab active" type="button" role="tab" aria-selected="true">实时告警诊断 <span>Prometheus</span></button>
+            <button id="modeManual" class="mode-tab" type="button" role="tab" aria-selected="false">手工故障诊断 <span>无需告警源</span></button>
+          </div>
+
+          <div id="realtimePanel" class="mode-panel active">
+            <div id="realtimeNotice" class="notice neutral"><span>i</span><div><strong>等待数据源检查</strong><p>确认 Prometheus 可用后才能开始实时告警诊断。</p></div></div>
+            <button id="realtimeRun" class="button primary wide" type="button" disabled>开始实时诊断</button>
+          </div>
+
+          <div id="manualPanel" class="mode-panel">
+            <label>目标服务（可选）<input id="manualService" type="text" maxlength="120" placeholder="例如：order-service"></label>
+            <label>故障现象 <textarea id="manualDescription" rows="6" maxlength="4000" placeholder="描述你观察到的现象、发生时间、影响范围和已尝试的操作…"></textarea></label>
+            <p class="field-hint"><span id="manualCount">0</span>/4000 · 输入内容会被标记为“用户提供的事实”，不会伪装成监控证据。</p>
+            <button id="manualRun" class="button primary wide" type="button">开始手工诊断</button>
+          </div>
+        </section>
+
+        <section id="aiopsResult" class="result-section empty" aria-live="polite">
+          <div class="empty-result"><span>⌁</span><h2>诊断结果会显示在这里</h2><p>选择一种模式并主动点击开始后，系统才会执行诊断。</p></div>
+          <div id="aiopsProgress" class="progress-panel" hidden></div>
+          <article id="aiopsReport" class="report-panel" hidden></article>
+          <section id="incidentReview" class="incident-review" hidden>
+            <div class="review-heading"><div><h3>确认并沉淀本次经验</h3><p>Agent 报告不会自动入库。请根据实际处置结果修正以下内容后再确认。</p></div><span>HUMAN · VERIFIED</span></div>
+            <div class="review-grid">
+              <label>复盘标题<input id="memoryIncidentTitle" maxlength="200" placeholder="例如：订单服务数据库连接失败"></label>
+              <label>目标服务<input id="memoryService" maxlength="120" placeholder="例如：order-service"></label>
+            </div>
+            <label>已确认现象（每行一项）<textarea id="memorySymptoms" rows="3" maxlength="4000" placeholder="HTTP 500 错误率持续升高"></textarea></label>
+            <label>告警名称（每行一项，可选）<textarea id="memoryAlerts" rows="2" maxlength="2000" placeholder="FaultLabHighErrorRate"></textarea></label>
+            <label>已确认关键证据（每行一项）<textarea id="memoryEvidence" rows="3" maxlength="6000" placeholder="日志出现 database connection refused"></textarea></label>
+            <label>已确认根因<textarea id="memoryRootCause" rows="3" maxlength="4000" placeholder="必须填写经过验证的根因，不能直接复制 Agent 猜测"></textarea></label>
+            <label>实际处置<textarea id="memoryResolution" rows="3" maxlength="4000" placeholder="描述实际执行并解决问题的操作"></textarea></label>
+            <label>恢复验证<textarea id="memoryVerification" rows="2" maxlength="2000" placeholder="例如：错误率恢复、告警解除、业务验证通过"></textarea></label>
+            <div class="review-actions">
+              <p>点击确认表示以上根因和处置已经由值班人员验证。</p>
+              <button id="memoryConfirm" class="button primary" type="button">确认并写入故障记忆</button>
+            </div>
+          </section>
+        </section>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
