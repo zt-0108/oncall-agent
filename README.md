@@ -1,6 +1,6 @@
 # OnCall Agent
 
-一个面向故障排查演示、学习和评测的本地 AIOps 项目。项目包含两个 Agent：面向日常问答的工具调用式 RAG 对话 Agent，以及基于 LangGraph `Plan → Execute → Replan` 工作流的 AIOps 诊断 Agent。
+一个面向故障排查演示、学习和评测的 AIOps 项目。项目包含两个 Agent：面向日常问答的工具调用式 RAG 对话 Agent，以及基于 LangGraph `Plan → Execute → Replan` 工作流的 AIOps 诊断 Agent。
 
 项目通过 Prometheus、结构化日志 MCP、Milvus、故障实验室和人工确认的故障记忆，形成完整诊断闭环：
 
@@ -18,7 +18,6 @@ SQLite 审计记录 + Milvus 故障记忆
 后续相似故障检索与辅助诊断
 ```
 
-> 本项目适合本地开发和研究演示。Fault Lab 产生的是安全、可恢复的本地模拟信号，不应直接用于生产系统故障注入。
 
 ## 核心能力
 
@@ -124,7 +123,6 @@ RAG_TOP_K=3
 INCIDENT_MEMORY_TOP_K=3
 ```
 
-不要提交真实的 `.env` 或 API Key。
 
 ### 2. 启动
 
@@ -244,7 +242,7 @@ curl -N -X POST http://localhost:9900/api/aiops \
 | 外部故障基准 | 冷启动与评测 | 否，仅作线索 |
 | 已确认故障记忆 | 相似案例检索 | 否，必须用当前证据验证 |
 
-当前外部案例主要参考 [RCAEval](https://github.com/phamquiluan/RCAEval)。项目只保存结构化摘要、固定提交来源和许可证信息，不复制数 GB 原始遥测。
+当前外部案例主要参考 [RCAEval](https://github.com/phamquiluan/RCAEval)。
 
 ## 项目结构
 
