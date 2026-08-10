@@ -32,9 +32,16 @@ class Settings(BaseSettings):
     milvus_timeout: int = 10000
 
     rag_top_k: int = 3
+    rag_candidate_k: int = 8
+    rag_rrf_k: int = 60
+    rag_keyword_corpus_limit: int = 2000
     rag_model: str = "qwen-max"
     max_memory_sessions: int = 500
     max_session_messages: int = 100
+    conversation_summary_trigger_tokens: int = 6000
+    conversation_summary_trigger_messages: int = 12
+    conversation_summary_keep_messages: int = 10
+    conversation_window_turns: int = 6
 
     chunk_max_size: int = 800
     chunk_overlap: int = 100

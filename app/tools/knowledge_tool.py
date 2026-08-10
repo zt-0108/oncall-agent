@@ -4,8 +4,7 @@ from langchain_core.documents import Document
 from langchain_core.tools import tool
 from loguru import logger
 
-from app.config import config
-from app.services.vector_store_manager import vector_store_manager
+from app.services.hybrid_retrieval_service import hybrid_retrieval_service
 
 
 @tool(response_format="content_and_artifact")
@@ -23,11 +22,7 @@ def retrieve_knowledge(query: str) -> tuple[str, list[Document]]:
     try:
         logger.info(f"知识检索工具被调用: query='{query}'")
 
-        # 从向量存储中检索相关文档
-        vector_store = vector_store_manager.get_vector_store()
-        retriever = vector_store.as_retriever(search_kwargs={"k": config.rag_top_k})
-
-        docs = retriever.invoke(query)
+        docs = hybrid_retrieval_service.retrieve(query)
 
         if not docs:
             logger.warning("未检索到相关文档")
@@ -60,6 +55,7 @@ def format_docs(docs: list[Document]) -> str:
         # 提取元数据
         metadata = doc.metadata
         source = metadata.get("_file_name", "未知来源")
+        routes = metadata.get("_retrieval_routes", [])
 
         # 提取标题信息 (如果有)
         headers = []
@@ -74,6 +70,8 @@ def format_docs(docs: list[Document]) -> str:
         if header_str:
             formatted += f"\n标题: {header_str}"
         formatted += f"\n来源: {source}"
+        if routes:
+            formatted += f"\n召回路径: {', '.join(routes)}"
         formatted += f"\n内容:\n{doc.page_content}\n"
 
         formatted_parts.append(formatted)

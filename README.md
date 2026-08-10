@@ -18,14 +18,13 @@ SQLite 审计记录 + Milvus 故障记忆
 后续相似故障检索与辅助诊断
 ```
 
-
 ## 核心能力
 
 ### 对话 Agent
 
 - 使用 LangChain `create_agent` 和通义千问模型。
 - 通过工具调用自主决定是否检索 Milvus RAG 知识库。
-- 支持普通回答、SSE 流式输出和多轮会话记忆。
+- 支持普通回答、SSE 流式输出和多轮会话记忆；达到 Token/消息阈值后自动生成摘要，并以“最新摘要 + 最近 N 轮”滑动窗口控制模型上下文。
 - 可调用本地工具以及 Log/Monitor MCP 工具。
 
 ### AIOps Agent
@@ -57,6 +56,8 @@ SQLite 审计记录 + Milvus 故障记忆
 - 启动时按 SHA-256 内容哈希增量同步 `aiops-docs/*.md`。
 - 未修改的文档不会重复生成 Embedding。
 - 同名文档更新时替换旧向量，避免长期重复。
+- 使用 Dense 向量、BM25 关键词和 Metadata 匹配三路召回，并通过 RRF 完成候选去重与排名融合。
+- Dense 或关键词链路不可用时自动降级到其余召回路径；知识文档与历史故障记忆保持独立检索，避免混淆当前证据和历史线索。
 - 支持手动跳过同步或强制重建。
 
 ## 系统架构
@@ -120,9 +121,15 @@ MILVUS_PORT=19530
 PROMETHEUS_BASE_URL=http://127.0.0.1:9090
 FAULT_LAB_BASE_URL=http://127.0.0.1:9910
 RAG_TOP_K=3
+RAG_CANDIDATE_K=8
+RAG_RRF_K=60
+RAG_KEYWORD_CORPUS_LIMIT=2000
+CONVERSATION_SUMMARY_TRIGGER_TOKENS=6000
+CONVERSATION_SUMMARY_TRIGGER_MESSAGES=12
+CONVERSATION_SUMMARY_KEEP_MESSAGES=10
+CONVERSATION_WINDOW_TURNS=6
 INCIDENT_MEMORY_TOP_K=3
 ```
-
 
 ### 2. 启动
 

@@ -6,20 +6,21 @@
 
 import asyncio
 from collections import OrderedDict
-from collections.abc import AsyncGenerator, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Sequence
+from textwrap import dedent
 from typing import Annotated, Any
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentMiddleware, ModelRequest, SummarizationMiddleware
 from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
-    RemoveMessage,
     SystemMessage,
 )
 from langchain_core.runnables import RunnableConfig
 from langchain_qwq import ChatQwen
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
+from langgraph.graph.message import add_messages
 from loguru import logger
 from typing_extensions import TypedDict
 
@@ -42,39 +43,71 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 
-def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
-    """
-    修剪消息历史，只保留最近的几条消息以适应上下文窗口
+SUMMARY_SOURCE = "summarization"
 
-    策略：
-    - 保留第一条系统消息（System Message）
-    - 保留最近的 6 条消息（3 轮对话）
-    - 当消息少于等于 7 条时，不做修剪
+CONVERSATION_SUMMARY_PROMPT = dedent("""
+    你负责压缩一段多轮对话，生成供后续 Agent 继续工作的上下文摘要。
 
-    Args:
-        state: Agent 状态
+    请保留：
+    1. 用户的核心目标、明确要求、偏好和约束；
+    2. 已确认的事实、重要实体、时间、标识符和参数；
+    3. 已调用工具及其关键结果，尤其是告警、指标、日志和知识库证据；
+    4. 已做出的决定、被否决的方案及原因；
+    5. 尚未完成的事项、风险、错误和下一步。
 
-    Returns:
-        包含修剪后消息的字典，如果无需修剪则返回 None
-    """
-    messages = state["messages"]
+    删除寒暄、重复内容和已经失去后续价值的细节。不得补充原对话中不存在的信息。
+    使用结构化、紧凑的中文 Markdown 输出，并明确区分事实、推断和待验证项。
 
-    # 如果消息数量较少，无需修剪
-    if len(messages) <= 7:
-        return None
+    <messages>
+    {messages}
+    </messages>
+""").strip()
 
-    # 提取第一条系统消息
-    first_msg = messages[0]
 
-    # 保留最近的 6 条消息（确保包含完整的对话轮次）
-    recent_messages = messages[-6:] if len(messages) % 2 == 0 else messages[-7:]
+class SlidingWindowMiddleware(AgentMiddleware):
+    """仅限制每次模型调用的可见历史，不删除检查点中的完整会话状态。"""
 
-    # 构建新的消息列表
-    new_messages = [first_msg] + list(recent_messages)
+    def __init__(self, turns: int) -> None:
+        super().__init__()
+        self.turns = max(1, turns)
 
-    logger.debug(f"修剪消息历史: {len(messages)} -> {len(new_messages)} 条")
+    @staticmethod
+    def _is_summary(message: BaseMessage) -> bool:
+        return message.additional_kwargs.get("lc_source") == SUMMARY_SOURCE
 
-    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *new_messages]}
+    def select_messages(self, messages: Sequence[BaseMessage]) -> list[BaseMessage]:
+        """保留最新摘要和最近 N 个用户轮次，避免截断 AI/Tool 消息组。"""
+        message_list = list(messages)
+        human_indices = [
+            index
+            for index, message in enumerate(message_list)
+            if isinstance(message, HumanMessage) and not self._is_summary(message)
+        ]
+        if len(human_indices) <= self.turns:
+            return message_list
+
+        start_index = human_indices[-self.turns]
+        recent_messages = message_list[start_index:]
+        summaries = [message for message in message_list[:start_index] if self._is_summary(message)]
+        if not summaries:
+            return message_list
+        return [summaries[-1], *recent_messages]
+
+    async def awrap_model_call(
+        self,
+        request: ModelRequest,
+        handler: Callable[[ModelRequest], Awaitable[Any]],
+    ) -> Any:
+        window_messages = self.select_messages(request.messages)
+        if len(window_messages) != len(request.messages):
+            logger.debug(
+                "模型输入应用滑动窗口: {} -> {} 条消息，保留最近 {} 个用户轮次",
+                len(request.messages),
+                len(window_messages),
+                self.turns,
+            )
+            request = request.override(messages=window_messages)
+        return await handler(request)
 
 
 class RagAgentService:
@@ -96,6 +129,23 @@ class RagAgentService:
             temperature=0.7,
             streaming=streaming,
         )
+
+        self.summary_model = ChatQwen(
+            model=self.model_name,
+            api_key=config.dashscope_api_secret,
+            temperature=0,
+            streaming=False,
+        )
+        self.summary_middleware = SummarizationMiddleware(
+            self.summary_model,
+            trigger=[
+                ("tokens", max(1, config.conversation_summary_trigger_tokens)),
+                ("messages", max(2, config.conversation_summary_trigger_messages)),
+            ],
+            keep=("messages", max(1, config.conversation_summary_keep_messages)),
+            summary_prompt=CONVERSATION_SUMMARY_PROMPT,
+        )
+        self.sliding_window_middleware = SlidingWindowMiddleware(config.conversation_window_turns)
 
         # 定义基础工具（与 AIOps Planner/Executor 使用同一套默认本地工具）
         self.tools = list(DEFAULT_LOCAL_AGENT_TOOLS)
@@ -144,6 +194,11 @@ class RagAgentService:
             self.agent = create_agent(
                 self.model,
                 tools=all_tools,
+                system_prompt=self.system_prompt,
+                middleware=[
+                    self.summary_middleware,
+                    self.sliding_window_middleware,
+                ],
                 checkpointer=self.checkpointer,
             )
             self._agent_initialized = True
@@ -180,12 +235,7 @@ class RagAgentService:
                 self.checkpointer.delete_thread(expired_session_id)
                 logger.info("清理最久未使用的内存会话: {}", expired_session_id)
 
-        if messages:
-            return [HumanMessage(content=question)]
-        return [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=question),
-        ]
+        return [HumanMessage(content=question)]
 
     def _build_system_prompt(self) -> str:
         """
