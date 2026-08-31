@@ -1,0 +1,22 @@
+[
+  {"id": "cpu-alert", "query": "CPU 使用率持续 95%，应该怎么排查", "expected_sources": ["cpu_high_usage.md"], "tags": ["direct"]},
+  {"id": "cpu-loop", "query": "进程 CPU 飙高，怀疑死循环或无限递归", "expected_sources": ["cpu_high_usage.md"], "tags": ["cause"]},
+  {"id": "memory-oom", "query": "应用出现 OutOfMemoryError 和 GC overhead", "expected_sources": ["memory_high_usage.md"], "tags": ["exact_error"]},
+  {"id": "memory-leak", "query": "内存持续上涨不释放，如何检查内存泄漏", "expected_sources": ["memory_high_usage.md"], "tags": ["cause"]},
+  {"id": "disk-full", "query": "磁盘使用率超过 90%，先清理哪些目录", "expected_sources": ["disk_high_usage.md"], "tags": ["direct"]},
+  {"id": "disk-inode", "query": "inode 用满但磁盘容量看起来还有空间", "expected_sources": ["disk_high_usage.md"], "tags": ["exact_term"]},
+  {"id": "slow-p99", "query": "接口 P99 响应时间超过 3 秒，如何定位", "expected_sources": ["slow_response.md"], "tags": ["direct"]},
+  {"id": "slow-database", "query": "slow_query 数据库慢查询导致接口延迟", "expected_sources": ["slow_response.md"], "tags": ["exact_term"]},
+  {"id": "unavailable-health", "query": "服务所有实例健康检查失败，接口完全不可用", "expected_sources": ["service_unavailable.md"], "tags": ["direct"]},
+  {"id": "unavailable-dependency", "query": "依赖服务故障导致主服务无法启动", "expected_sources": ["service_unavailable.md"], "tags": ["cause"]},
+  {"id": "memory-confirm", "query": "什么条件下才能把诊断结果写入故障记忆库", "expected_sources": ["incident-memory-workflow.md"], "tags": ["governance"]},
+  {"id": "memory-delete", "query": "人工确认的历史根因后来发现错误应该怎样处理", "expected_sources": ["incident-memory-workflow.md"], "tags": ["governance"]},
+  {"id": "benchmark-network", "query": "Fault Lab 网络延迟回放案例有哪些排查线索", "expected_sources": ["external-benchmark-cases.md"], "tags": ["benchmark"]},
+  {"id": "benchmark-boundary", "query": "外部 RCA 基准案例能不能直接当作当前故障事实", "expected_sources": ["external-benchmark-cases.md"], "tags": ["benchmark"]},
+  {"id": "noisy-cpu", "query": "2026-08-31 10:20:30 ERROR checkoutservice trace_id=abc123 告警连续触发，日志重复打印 CPU usage=96% CPU usage=96%，麻烦帮忙查一下应该按照什么步骤定位 CPU 资源饱和问题，暂时不要猜测根因", "expected_sources": ["cpu_high_usage.md", "external-benchmark-cases.md"], "tags": ["noisy", "rewrite"]},
+  {"id": "noisy-memory", "query": "2026-08-31 10:22:10 ERROR paymentservice request_id=req456 OutOfMemoryError，监控显示 memory_usage=92%，相同堆栈重复出现多次，请从知识库找出内存告警排查和验证步骤", "expected_sources": ["memory_high_usage.md"], "tags": ["noisy", "rewrite"]},
+  {"id": "noisy-disk", "query": "2026-08-31 10:25:00 WARN orderservice span_id=span789 磁盘空间只剩 4%，应用仍在持续写日志，日志内容很多但核心问题是 DiskSpaceHigh，请给出磁盘占用检查、紧急清理和处理后验证的 Runbook", "expected_sources": ["disk_high_usage.md"], "tags": ["noisy", "rewrite"]},
+  {"id": "noisy-latency", "query": "2026-08-31 10:30:00 ERROR checkoutservice request_id=req999 response_time=4200ms，最近十五分钟大量请求都超过 3 秒，同时看到 slow_query=true，请检索响应过慢、数据库慢查询和外部 API 超时的排查流程", "expected_sources": ["slow_response.md"], "tags": ["noisy", "rewrite"]},
+  {"id": "noisy-unavailable", "query": "2026-08-31 10:35:00 ERROR userservice trace_id=trace000 所有实例 health check failed，返回 ServiceUnavailable，重试仍失败，请检索服务不可用时第一分钟、五分钟以及恢复验证流程", "expected_sources": ["service_unavailable.md"], "tags": ["noisy", "rewrite"]},
+  {"id": "mixed-resource", "query": "服务变慢并伴随 CPU 和磁盘 IO 升高，应该先参考哪些排查文档", "expected_sources": ["slow_response.md", "cpu_high_usage.md", "disk_high_usage.md"], "tags": ["multi_relevant"]}
+]

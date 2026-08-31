@@ -9,6 +9,7 @@ from app.services.hybrid_retrieval_service import (
     reciprocal_rank_fusion,
     tokenize_for_bm25,
 )
+from app.services.query_rewrite_service import QueryRewriteResult
 
 
 def make_document(identifier: str, content: str, **metadata: str) -> Document:
@@ -144,3 +145,42 @@ def test_keyword_corpus_excludes_confirmed_incident_memory(monkeypatch):
     documents = HybridRetrievalService._load_knowledge_corpus(100)
 
     assert [document.id for document in documents] == ["knowledge"]
+
+
+def test_rewrite_keeps_original_query_and_adds_rewritten_query_to_all_routes():
+    documents = [
+        make_document(
+            "database",
+            "checkoutservice DBConnectionError 数据库连接失败排查",
+            service_name="checkoutservice",
+        ),
+        make_document("latency", "接口延迟升高，检查 CPU 指标"),
+    ]
+    dense_queries: list[str] = []
+
+    def dense_search(query: str, _limit: int) -> list[Document]:
+        dense_queries.append(query)
+        return documents if "DBConnectionError" in query else []
+
+    original = "2026-08-31 ERROR checkoutservice DBConnectionError 这个问题怎么处理"
+    rewritten = "checkoutservice DBConnectionError 数据库连接失败排查"
+    service = HybridRetrievalService(
+        dense_search=dense_search,
+        corpus_loader=lambda _limit: documents,
+        query_rewriter=lambda query: QueryRewriteResult(
+            original_query=query,
+            rewritten_query=rewritten,
+            attempted=True,
+            applied=True,
+            reason="log_noise",
+        ),
+    )
+
+    results = service.retrieve(original, top_k=1)
+
+    assert dense_queries == [original, rewritten]
+    assert results[0].id == "database"
+    assert results[0].metadata["_query_rewrite_applied"] is True
+    assert results[0].metadata["_rewritten_query"] == rewritten
+    assert any(route.endswith(":original") for route in results[0].metadata["_retrieval_routes"])
+    assert any(route.endswith(":rewrite") for route in results[0].metadata["_retrieval_routes"])
