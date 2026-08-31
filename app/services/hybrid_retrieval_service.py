@@ -15,6 +15,7 @@ from loguru import logger
 
 from app.config import config
 from app.core.milvus_client import milvus_manager
+from app.services.query_rewrite_service import QueryRewriteResult, query_rewrite_service
 from app.services.vector_store_manager import vector_store_manager
 
 KNOWLEDGE_EXTENSIONS = {".md", ".txt"}
@@ -23,6 +24,7 @@ ASCII_OR_CJK_PATTERN = re.compile(r"[a-z0-9_.:/-]+|[\u4e00-\u9fff]+", re.IGNOREC
 
 DenseSearch = Callable[[str, int], list[Document]]
 CorpusLoader = Callable[[int], list[Document]]
+QueryRewriter = Callable[[str], QueryRewriteResult]
 
 
 def tokenize_for_bm25(text: str) -> list[str]:
@@ -176,9 +178,11 @@ class HybridRetrievalService:
         self,
         dense_search: DenseSearch | None = None,
         corpus_loader: CorpusLoader | None = None,
+        query_rewriter: QueryRewriter | None = None,
     ) -> None:
         self._dense_search = dense_search or self._search_dense
         self._corpus_loader = corpus_loader or self._load_knowledge_corpus
+        self._query_rewriter = query_rewriter or query_rewrite_service.rewrite
 
     @staticmethod
     def _search_dense(query: str, limit: int) -> list[Document]:
@@ -229,10 +233,17 @@ class HybridRetrievalService:
         candidate_k = max(final_k, config.rag_candidate_k)
         rankings: dict[str, Sequence[Document]] = {}
 
-        try:
-            rankings["dense"] = self._dense_search(query, candidate_k)
-        except Exception:
-            logger.exception("Dense 向量召回失败，继续使用其他召回链路")
+        rewrite_result = self._query_rewriter(query)
+        query_variants = [("original", rewrite_result.original_query)]
+        if rewrite_result.applied:
+            query_variants.append(("rewrite", rewrite_result.rewritten_query))
+
+        for label, search_query in query_variants:
+            route_name = "dense" if len(query_variants) == 1 else f"dense:{label}"
+            try:
+                rankings[route_name] = self._dense_search(search_query, candidate_k)
+            except Exception:
+                logger.exception("Dense 向量召回失败，继续使用其他召回链路")
 
         corpus: list[Document] = []
         try:
@@ -241,17 +252,34 @@ class HybridRetrievalService:
             logger.exception("关键词语料加载失败，跳过 BM25 与 Metadata 召回")
 
         if corpus:
-            rankings["bm25"] = bm25_rank(query, corpus, candidate_k)
-            rankings["metadata"] = metadata_rank(query, corpus, candidate_k)
+            for label, search_query in query_variants:
+                suffix = "" if len(query_variants) == 1 else f":{label}"
+                rankings[f"bm25{suffix}"] = bm25_rank(search_query, corpus, candidate_k)
+                rankings[f"metadata{suffix}"] = metadata_rank(search_query, corpus, candidate_k)
 
         fused = reciprocal_rank_fusion(
             rankings,
             rrf_k=config.rag_rrf_k,
             top_k=final_k,
         )
+        if rewrite_result.applied:
+            rewritten_fused: list[Document] = []
+            for document in fused:
+                metadata = dict(document.metadata)
+                metadata["_query_rewrite_applied"] = True
+                metadata["_rewritten_query"] = rewrite_result.rewritten_query
+                rewritten_fused.append(
+                    Document(
+                        id=document.id,
+                        page_content=document.page_content,
+                        metadata=metadata,
+                    )
+                )
+            fused = rewritten_fused
         logger.info(
-            "混合检索完成: query={!r}, routes={}, candidates={}, final={}",
+            "混合检索完成: query={!r}, rewrite={}, routes={}, candidates={}, final={}",
             query,
+            rewrite_result.applied,
             {name: len(documents) for name, documents in rankings.items()},
             sum(len(documents) for documents in rankings.values()),
             len(fused),

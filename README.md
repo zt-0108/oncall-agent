@@ -57,6 +57,7 @@ SQLite 审计记录 + Milvus 故障记忆
 - 未修改的文档不会重复生成 Embedding。
 - 同名文档更新时替换旧向量，避免长期重复。
 - 使用 Dense 向量、BM25 关键词和 Metadata 匹配三路召回，并通过 RRF 完成候选去重与排名融合。
+- 对长查询、多行日志和包含指代的查询按条件执行 Query Rewrite；原查询与改写查询共同参与召回，改写失败或关键标识符丢失时自动回退。
 - Dense 或关键词链路不可用时自动降级到其余召回路径；知识文档与历史故障记忆保持独立检索，避免混淆当前证据和历史线索。
 - 支持手动跳过同步或强制重建。
 
@@ -124,6 +125,9 @@ RAG_TOP_K=3
 RAG_CANDIDATE_K=8
 RAG_RRF_K=60
 RAG_KEYWORD_CORPUS_LIMIT=2000
+RAG_QUERY_REWRITE_ENABLED=true
+RAG_QUERY_REWRITE_MIN_CHARS=160
+RAG_QUERY_REWRITE_MAX_CHARS=4000
 CONVERSATION_SUMMARY_TRIGGER_TOKENS=6000
 CONVERSATION_SUMMARY_TRIGGER_MESSAGES=12
 CONVERSATION_SUMMARY_KEEP_MESSAGES=10
@@ -190,6 +194,24 @@ Remove-Item Env:RAG_SYNC_MODE
 ```
 
 同步清单保存在 `volumes/aiops-docs-manifest.json`。
+
+## 检索质量评测
+
+固定评测集位于 `evals/retrieval_cases.json`，覆盖直接告警、精确错误码、长日志噪声、治理问题和多文档查询。纯本地基线不会连接 Milvus，也不会调用外部模型：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py --offline --baseline-only
+```
+
+当前 20 条本地词法基线结果为：Hit Rate@3 `95%`、Recall@8 `100%`、MRR@8 `93.75%`、nDCG@3 `88.57%`。候选覆盖已经充分，因此当前保留 8 个候选和 RRF，不启用额外 Reranker；知识库或故障记忆规模扩大后再根据同一评测集复核。
+
+连接 Milvus 并对比 Query Rewrite 时可运行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts\evaluate_retrieval.py
+```
+
+完整评测会把评测查询发送给项目配置的 Embedding 和 Query Rewrite 模型。不要直接使用未经脱敏的生产日志；如需完全禁止 Rewrite，可设置 `RAG_QUERY_REWRITE_ENABLED=false`。
 
 ## 主要 API
 

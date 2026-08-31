@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     rag_candidate_k: int = 8
     rag_rrf_k: int = 60
     rag_keyword_corpus_limit: int = 2000
+    rag_query_rewrite_enabled: bool = True
+    rag_query_rewrite_min_chars: int = 160
+    rag_query_rewrite_max_chars: int = 4000
     rag_model: str = "qwen-max"
     max_memory_sessions: int = 500
     max_session_messages: int = 100
